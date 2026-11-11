@@ -11,6 +11,15 @@ if pgrep -f 'pt/bin/PacketTracer' >/dev/null 2>&1; then
   exit 0
 fi
 
+# Version 9 ships as an AppImage, which cannot mount itself inside a
+# container (no FUSE). Unpack it once and run the unpacked copy.
+if [ -f /opt/pt/packettracer.AppImage ]; then
+  if [ ! -x /opt/pt/squashfs-root/AppRun ]; then
+    (cd /opt/pt && sudo ./packettracer.AppImage --appimage-extract >/dev/null)
+  fi
+  cd "$HOME" && exec /opt/pt/squashfs-root/AppRun "$@"
+fi
+
 if [ -x /opt/pt/packettracer ]; then
   exec /opt/pt/packettracer "$@"
 elif command -v packettracer >/dev/null 2>&1; then
