@@ -1,0 +1,28 @@
+{
+  "name": "Packet Tracer",
+  "build": { "dockerfile": "Dockerfile" },
+  "features": {
+    "ghcr.io/devcontainers/features/desktop-lite:1": {
+      "password": "vscode",
+      "webPort": "6080",
+      "vncPort": "5901"
+    }
+  },
+  "runArgs": ["--shm-size=1g"],
+  "hostRequirements": { "cpus": 2, "memory": "8gb" },
+  "forwardPorts": [6080],
+  "portsAttributes": {
+    "6080": { "label": "سطح المكتب", "onAutoForward": "openBrowser" }
+  },
+  "containerEnv": {
+    "VNC_RESOLUTION": "1280x720x24",
+    "QTWEBENGINE_DISABLE_SANDBOX": "1",
+    "QTWEBENGINE_CHROMIUM_FLAGS": "--no-sandbox --disable-gpu",
+    "LIBGL_ALWAYS_SOFTWARE": "1"
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postAttachCommand": "pt-welcome",
+  "customizations": {
+    "codespaces": { "openFiles": ["README.md"] }
+  }
+}

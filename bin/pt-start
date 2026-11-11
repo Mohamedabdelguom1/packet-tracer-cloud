@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Starts Packet Tracer on the desktop.
+export DISPLAY="${DISPLAY:-:1}"
+# Its sign-in window is a built-in Chromium, which cannot use its own
+# sandbox inside a container.
+export QTWEBENGINE_DISABLE_SANDBOX=1
+export QTWEBENGINE_CHROMIUM_FLAGS="--no-sandbox --disable-gpu"
+export LIBGL_ALWAYS_SOFTWARE=1
+
+if pgrep -f 'pt/bin/PacketTracer' >/dev/null 2>&1; then
+  exit 0
+fi
+
+if [ -x /opt/pt/packettracer ]; then
+  exec /opt/pt/packettracer "$@"
+elif command -v packettracer >/dev/null 2>&1; then
+  exec packettracer "$@"
+fi
+
+zenity --info --width=360 --title="Packet Tracer" \
+  --text="لم يُثبَّت باكت تريسر بعد.\n\nحمّل نسخة أوبونتو من موقع أكاديمية سيسكو بالمتصفح، وسيبدأ التثبيت وحده بعد اكتمال التحميل." \
+  >/dev/null 2>&1

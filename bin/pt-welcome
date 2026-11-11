@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Runs each time the codespace is opened: prints the desktop link, then
+# either starts Packet Tracer or walks the student through installing it.
+set -u
+
+if [ -n "${CODESPACE_NAME:-}" ]; then
+  url="https://${CODESPACE_NAME}-6080.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}/vnc.html?autoconnect=true&resize=scale&password=vscode"
+else
+  url="http://localhost:6080/vnc.html?autoconnect=true&resize=scale&password=vscode"
+fi
+
+printf '\n============================================================\n'
+printf '  DESKTOP / سطح المكتب:\n\n  %s\n' "$url"
+printf '============================================================\n\n'
+
+# Wait for the desktop to be up.
+for _ in $(seq 1 60); do
+  [ -S /tmp/.X11-unix/X1 ] && break
+  sleep 1
+done
+export DISPLAY=:1
+
+pt_installed() { [ -x /opt/pt/packettracer ] || command -v packettracer >/dev/null 2>&1; }
+
+if pt_installed; then
+  setsid nohup pt-start >/dev/null 2>&1 &
+else
+  if ! pgrep -f /usr/lib/firefox/firefox >/dev/null 2>&1; then
+    setsid nohup firefox "https://www.netacad.com/resources/lab-downloads?courseLang=en-US" >/dev/null 2>&1 &
+  fi
+  setsid nohup pt-install >/tmp/pt-install.log 2>&1 &
+fi

@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Waits for the Packet Tracer .deb to finish downloading in ~/Downloads,
+# asks the student to accept Cisco's license, then installs it.
+#   pt-install         keep waiting for the download
+#   pt-install --now   use what is in ~/Downloads now (menu entry)
+set -u
+export DISPLAY="${DISPLAY:-:1}"
+
+dl="$HOME/Downloads"
+mkdir -p "$dl"
+
+# Only one copy at a time.
+exec 9>/tmp/pt-install.lock
+flock -n 9 || exit 0
+
+pt_installed() { [ -x /opt/pt/packettracer ] || command -v packettracer >/dev/null 2>&1; }
+say()  { zenity --info  --width=380 --title="Packet Tracer" --text="$1" >/dev/null 2>&1; }
+fail() { zenity --error --width=380 --title="Packet Tracer" --text="$1" >/dev/null 2>&1; }
+
+# Newest finished .deb that looks like Packet Tracer (Firefox keeps a .part
+# file next to it while the download is still going).
+ready_deb() {
+  local f
+  f="$(ls -t "$dl"/*.deb 2>/dev/null | head -n1)"
+  [ -n "$f" ] || return 1
+  ls "$dl"/*.part >/dev/null 2>&1 && return 1
+  [ "$(stat -c %s "$f")" -gt 50000000 ] || return 1
+  printf '%s' "$f"
+}
+
+if pt_installed; then
+  [ "${1:-}" = "--now" ] && say "باكت تريسر مثبَّت بالفعل."
+  exit 0
+fi
+
+deb=""
+if [ "${1:-}" = "--now" ]; then
+  deb="$(ready_deb)" || {
+    say "لم أجد ملف التثبيت في مجلد التنزيلات.\n\nحمّل نسخة أوبونتو من موقع أكاديمية سيسكو بالمتصفح، وانتظر حتى يكتمل التحميل."
+    exit 0
+  }
+else
+  while :; do
+    pt_installed && exit 0
+    if deb="$(ready_deb)"; then
+      s1="$(stat -c %s "$deb")"; sleep 5; s2="$(stat -c %s "$deb" 2>/dev/null || echo 0)"
+      [ "$s1" = "$s2" ] && break
+    fi
+    sleep 5
+  done
+fi
+
+zenity --question --width=420 --title="Packet Tracer" \
+  --ok-label="أوافق وثبّت" --cancel-label="ليس الآن" \
+  --text="اكتمل تحميل باكت تريسر.\n\nبالضغط على «أوافق وثبّت» فأنت توافق على اتفاقية ترخيص سيسكو للبرنامج، ويبدأ التثبيت. يأخذ بضع دقائق." \
+  >/dev/null 2>&1 || exit 0
+
+# Pre-answer the license questions so nothing needs a keyboard.
+pkg="$(dpkg-deb -f "$deb" Package 2>/dev/null || echo packettracer)"
+tmp="$(mktemp -d)"
+if dpkg-deb -e "$deb" "$tmp" 2>/dev/null && [ -f "$tmp/templates" ]; then
+  awk '/^Template:/ {t=$2} /^Type:/ {print t, $2}' "$tmp/templates" |
+  while read -r q type; do
+    case "$q" in
+      *[Ee][Uu][Ll][Aa]*|*[Ll]icense*)
+        [ "$type" = boolean ] && echo "$pkg $q boolean true" ;;
+    esac
+  done | sudo debconf-set-selections
+fi
+rm -rf "$tmp"
+
+xterm -geometry 110x30 -T "Installing Packet Tracer" -e bash -c '
+  sudo apt-get update
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$1"
+  echo; echo "== done =="; sleep 3
+' _ "$deb"
+
+if ! pt_installed; then
+  # Fall back to the installer's own questions, answered by the student.
+  xterm -geometry 110x30 -T "Installing Packet Tracer" -e bash -c '
+    sudo DEBIAN_FRONTEND=dialog dpkg --configure -a
+    pt_ok() { [ -x /opt/pt/packettracer ] || command -v packettracer >/dev/null 2>&1; }
+    pt_ok || sudo DEBIAN_FRONTEND=dialog apt-get install -y "$1"
+    echo; echo "== done =="; sleep 3
+  ' _ "$deb"
+fi
+
+if pt_installed; then
+  rm -f "$deb"
+  say "تم تثبيت باكت تريسر.\n\nسيفتح الآن، وفي المرات القادمة افتحه من زر Packet Tracer في الشريط السفلي."
+  exec pt-start
+else
+  fail "لم يكتمل التثبيت.\n\nجرّب مرة أخرى من القائمة (اضغط مطولاً على سطح المكتب ثم Install Packet Tracer)، وإن تكرر الخطأ أخبر المدرّب."
+fi
